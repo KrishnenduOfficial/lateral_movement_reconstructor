@@ -1,4 +1,3 @@
-#Lateral Movement Reconstructor
 # Lateral Movement Reconstructor (lmr)
 
 Reconstruct attacker lateral movement from a network capture, and see the proof behind every finding.
