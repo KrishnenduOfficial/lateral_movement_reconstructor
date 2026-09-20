@@ -1,0 +1,13 @@
+data/
+*pcap
+*pcapng
+*.pcap.gz
+*zip
+logs/
+out/
+.venv/
+__pycache__/
+*egg-info/
+.pytest_cache/
+
+.ruff_cache/
