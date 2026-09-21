@@ -10,6 +10,7 @@ from lmr.parsers.zeek_tsv import parse_zeek_tsv
 from lmr.schema import normalize_zeek_logs
 from lmr.detections.psexec import detect_psexec
 from lmr.graph.builder import build_attack_graph
+from lmr.report import export_findings
 
 
 def run_doctor() -> None:
@@ -105,7 +106,11 @@ def run_analyze(args: argparse.Namespace) -> None:
     # Build the attack graph
     graph = build_attack_graph(findings)
     print(f"[+] Attack graph generated: {len(graph.nodes)} hosts, {len(graph.edges)} connections.")
-    print("[*] Milestone 1 Complete! Output generation is next.")
+    
+    # Export results to disk
+    print("[*] Generating reports (JSON, CSV)...")
+    export_findings(findings, out_dir)
+    print(f"[+] Analysis complete. Results saved to: {out_dir.absolute()}")
 
 
 def main() -> None:
