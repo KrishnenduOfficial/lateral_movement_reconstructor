@@ -35,67 +35,65 @@ Give it a PCAP (or existing Zeek logs). It will:
 *Out of scope for v0.1: C2 detection, malware analysis, machine learning, and WMI/DCOM/SSH lateral movement.*
 
 ## How it works
-PCAP -> Zeek -> structured logs -> lmr -> report + evidence
-(parse)                    (detect, correlate, graph, score)
-Zeek does the protocol decoding. `lmr` does the detection, correlation, scoring, and reporting on top of it.
+
+    PCAP -> Zeek -> structured logs -> lmr -> report + evidence
+           (parse)                    (detect, correlate, graph, score)
+
+Zeek does the protocol decoding. lmr does the detection, correlation, scoring, and reporting on top of it.
 
 ## Usage
 
-```bash
-lmr analyze capture.pcapng --case IR-001
-lmr analyze --zeek-logs ./zeek-logs --case IR-002
-lmr doctor
-lmr doctor will check your machine and print setup instructions for Docker or Zeek.
+    lmr analyze capture.pcapng --case IR-001
+    lmr analyze --zeek-logs ./zeek-logs --case IR-002
+    lmr doctor
 
-Output (in development)
-out/IR-001/
-  report.html        interactive graph, timeline, finding cards
-  findings.json      machine-readable findings
-  findings.csv       for Excel or Timeline Explorer
-  coverage.txt       what was analyzed and what was skipped
-  manifest.json      input SHA-256, tool, rule, and Zeek versions
-  evidence/          per-finding PCAP slices and Wireshark filters
-Requirements
-Python 3.11 or newer
+`lmr doctor` will check your machine and print setup instructions for Docker or Zeek.
 
-One of: Docker (Zeek bundled in the image), a local Zeek install, or existing Zeek logs
+## Output (in development)
 
-Repository layout
-src/lmr/          tool source code (CLI, runner, parsers, detections, graph)
-tests/            unit tests and fixtures
-docs/             notes, triage guides, dataset index
-samples/          tiny sample logs
-scripts/          helper scripts
-Test data
+    out/IR-001/
+      report.html        interactive graph, timeline, finding cards
+      findings.json      machine-readable findings
+      findings.csv       for Excel or Timeline Explorer
+      coverage.txt       what was analyzed and what was skipped
+      manifest.json      input SHA-256, tool, rule, and Zeek versions
+      evidence/          per-finding PCAP slices and Wireshark filters
+
+## Requirements
+
+- Python 3.11 or newer
+- One of: Docker (Zeek bundled in the image), a local Zeek install, or existing Zeek logs
+
+## Repository layout
+
+    src/lmr/          tool source code (CLI, runner, parsers, detections, graph)
+    tests/            unit tests and fixtures
+    docs/             notes, triage guides, dataset index
+    samples/          tiny sample logs
+    scripts/          helper scripts
+
+## Test data
+
 Capture files are not stored in this repository. docs/dataset_index.csv lists the captures used for development, with sizes and SHA-256 hashes so results can be reproduced. Sources are public: CyberDefenders labs, the Zeek project's test traces, and WRCCDC competition captures. Credit belongs to their authors.
 
-Roadmap
-[x] Phase A: environment, Zeek verified, data organized, repository created
+## Roadmap
 
-[x] Phase B: Zeek runner, memory-efficient TSV parser, unified event schema, first detection (SMB/PsExec), attack graph builder
+- [x] Phase A: environment, Zeek verified, data organized, repository created
+- [x] Phase B: Zeek runner, memory-efficient TSV parser, unified event schema, first detection (SMB/PsExec), attack graph builder
+- [ ] Phase C: remaining detections, HTML/JSON/CSV reports, evidence PCAP slicing
+- [ ] Phase D: validation on labeled captures, Docker image, CI, v0.1.0 release
 
-[ ] Phase C: remaining detections, HTML/JSON/CSV reports, evidence PCAP slicing
+## Known limitations
 
-[ ] Phase D: validation on labeled captures, Docker image, CI, v0.1.0 release
+- Encrypted SMB3 and WinRM payloads hide content. Detection there relies on metadata.
+- Requires Zeek, directly or through Docker, unless you supply Zeek logs.
+- NTLM / pass-the-hash detection is heuristic and will carry lower confidence.
+- Validation results have not been published yet.
 
-Known limitations
-Encrypted SMB3 and WinRM payloads hide content. Detection there relies on metadata.
+## License
 
-Requires Zeek, directly or through Docker, unless you supply Zeek logs.
-
-NTLM / pass-the-hash detection is heuristic and will carry lower confidence.
-
-Validation results have not been published yet.
-
-AI Assistance Note
-This project was developed via pair-programming with an AI assistant to accelerate implementation while maintaining strict architectural control.
-
-Human (Author): Defined the project architecture, set zero-config tool constraints, designed the DFIR heuristics (SMB/PsExec correlation logic), curated the test datasets, performed local validation, and managed version control.
-
-AI: Drafted the Python implementation (argparse CLI, subprocess Docker wrapping, generator-based TSV parsing, NetworkX graph logic) and wrote unit tests based on provided constraints.
-
-License
 MIT (license file to be added).
 
-Author
+## Author
+
 Krishnendu Bhattacherjee
