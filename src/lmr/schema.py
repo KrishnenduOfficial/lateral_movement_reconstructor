@@ -76,3 +76,16 @@ def normalize_zeek_logs(
                 action=record.get("operation", ""),
                 detail=record.get("endpoint", ""),
             )
+
+
+@dataclass
+class DetectionFinding:
+    """Represents a finalized, correlated lateral movement finding."""
+    rule_id: str
+    title: str
+    attack_ids: list[str]
+    confidence: str
+    src_ip: str
+    dst_ip: str
+    evidence_uids: list[str]
+    reason: str
