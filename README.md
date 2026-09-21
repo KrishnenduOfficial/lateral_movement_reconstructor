@@ -2,9 +2,9 @@
 
 Reconstruct attacker lateral movement from a network capture, and see the proof behind every finding.
 
-> **Status: early development.** The project skeleton, test dataset, and design are done. The CLI and detections are being built and are not usable yet. Everything under "Planned" describes the intended behavior, not what works today.
+> **Status: Milestone 1 Complete (Active Development).** The core analysis pipeline (Zeek execution, log parsing, unified schema, detection engine, and attack graph builder) is functional. The CLI successfully detects PsExec lateral movement. Final report generation (HTML/JSON) and remaining detections are currently in development.
 
-## What it will do
+## What it does
 
 Give it a PCAP (or existing Zeek logs). It will:
 
@@ -21,41 +21,33 @@ Give it a PCAP (or existing Zeek logs). It will:
 - **Explainable confidence.** Scores show what raised and lowered them. No black box.
 - **Honest limits.** The tool reports what it could not analyze, such as missing logs or encrypted traffic. It does not claim to detect everything.
 
-## Planned detections (v0.1)
+## Supported detections (v0.1 Target)
 
-| Technique | ATT&CK | Zeek evidence |
-|---|---|---|
-| SMB / PsExec-style remote execution | T1021.002, T1569.002 | smb_mapping, smb_files, dce_rpc |
-| WinRM | T1021.006 | http, conn |
-| RDP | T1021.001 | rdp |
-| Kerberoasting | T1558.003 | kerberos |
-| DCSync | T1003.006 | dce_rpc |
-| NTLM / pass-the-hash (heuristic) | T1550.002 | ntlm |
+| Technique | ATT&CK | Zeek evidence | Status |
+|---|---|---|---|
+| SMB / PsExec-style remote execution | T1021.002, T1569.002 | smb_mapping, smb_files, dce_rpc | Active |
+| WinRM | T1021.006 | http, conn | Planned |
+| RDP | T1021.001 | rdp | Planned |
+| Kerberoasting | T1558.003 | kerberos | Planned |
+| DCSync | T1003.006 | dce_rpc | Planned |
+| NTLM / pass-the-hash (heuristic) | T1550.002 | ntlm | Planned |
 
-Out of scope for v0.1: C2 detection, malware analysis, machine learning, and WMI/DCOM/SSH lateral movement.
+*Out of scope for v0.1: C2 detection, malware analysis, machine learning, and WMI/DCOM/SSH lateral movement.*
 
 ## How it works
-
-```
 PCAP -> Zeek -> structured logs -> lmr -> report + evidence
-       (parse)                    (detect, correlate, graph, score)
-```
+(parse)                    (detect, correlate, graph, score)
+Zeek does the protocol decoding. `lmr` does the detection, correlation, scoring, and reporting on top of it.
 
-Zeek does the protocol decoding. lmr does the detection, correlation, scoring, and reporting on top of it.
+## Usage
 
-## Planned usage
-
-```
-lmr analyze capture.pcap --case IR-001
+```bash
+lmr analyze capture.pcapng --case IR-001
 lmr analyze --zeek-logs ./zeek-logs --case IR-002
 lmr doctor
-```
+lmr doctor will check your machine and print setup instructions for Docker or Zeek.
 
-`lmr doctor` will check your machine and print setup instructions.
-
-## Planned output
-
-```
+Output (in development)
 out/IR-001/
   report.html        interactive graph, timeline, finding cards
   findings.json      machine-readable findings
@@ -63,45 +55,47 @@ out/IR-001/
   coverage.txt       what was analyzed and what was skipped
   manifest.json      input SHA-256, tool, rule, and Zeek versions
   evidence/          per-finding PCAP slices and Wireshark filters
-```
+Requirements
+Python 3.11 or newer
 
-## Requirements (planned)
+One of: Docker (Zeek bundled in the image), a local Zeek install, or existing Zeek logs
 
-- Python 3.11 or newer
-- One of: Docker (Zeek bundled in the image), a local Zeek install, or existing Zeek logs
-
-## Repository layout
-
-```
-src/lmr/          tool source code
+Repository layout
+src/lmr/          tool source code (CLI, runner, parsers, detections, graph)
 tests/            unit tests and fixtures
 docs/             notes, triage guides, dataset index
 samples/          tiny sample logs
 scripts/          helper scripts
-```
+Test data
+Capture files are not stored in this repository. docs/dataset_index.csv lists the captures used for development, with sizes and SHA-256 hashes so results can be reproduced. Sources are public: CyberDefenders labs, the Zeek project's test traces, and WRCCDC competition captures. Credit belongs to their authors.
 
-## Test data
+Roadmap
+[x] Phase A: environment, Zeek verified, data organized, repository created
 
-Capture files are not stored in this repository. `docs/dataset_index.csv` lists the captures used for development, with sizes and SHA-256 hashes so results can be reproduced. Sources are public: CyberDefenders labs, the Zeek project's test traces, and (planned) WRCCDC competition captures. Credit belongs to their authors.
+[x] Phase B: Zeek runner, memory-efficient TSV parser, unified event schema, first detection (SMB/PsExec), attack graph builder
 
-## Roadmap
+[ ] Phase C: remaining detections, HTML/JSON/CSV reports, evidence PCAP slicing
 
-- [x] Phase A: environment, Zeek verified, data organized, repository created
-- [ ] Phase B: Zeek runner, log parser, first detection (SMB/PsExec)
-- [ ] Phase C: remaining detections, attack-path graph, HTML/JSON/CSV reports
-- [ ] Phase D: validation on labeled captures, Docker image, CI, v0.1.0 release
+[ ] Phase D: validation on labeled captures, Docker image, CI, v0.1.0 release
 
-## Known limitations
+Known limitations
+Encrypted SMB3 and WinRM payloads hide content. Detection there relies on metadata.
 
-- Encrypted SMB3 and WinRM payloads hide content. Detection there relies on metadata.
-- Requires Zeek, directly or through Docker, unless you supply Zeek logs.
-- NTLM / pass-the-hash detection is heuristic and will carry lower confidence.
-- Validation results have not been published yet.
+Requires Zeek, directly or through Docker, unless you supply Zeek logs.
 
-## License
+NTLM / pass-the-hash detection is heuristic and will carry lower confidence.
 
+Validation results have not been published yet.
+
+AI Assistance Note
+This project was developed via pair-programming with an AI assistant to accelerate implementation while maintaining strict architectural control.
+
+Human (Author): Defined the project architecture, set zero-config tool constraints, designed the DFIR heuristics (SMB/PsExec correlation logic), curated the test datasets, performed local validation, and managed version control.
+
+AI: Drafted the Python implementation (argparse CLI, subprocess Docker wrapping, generator-based TSV parsing, NetworkX graph logic) and wrote unit tests based on provided constraints.
+
+License
 MIT (license file to be added).
 
-## Author
-
+Author
 Krishnendu Bhattacherjee
