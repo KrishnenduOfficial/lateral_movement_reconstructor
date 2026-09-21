@@ -9,6 +9,7 @@ from lmr.zeek_runner import run_zeek, ZeekExecutionError
 from lmr.parsers.zeek_tsv import parse_zeek_tsv
 from lmr.schema import normalize_zeek_logs
 from lmr.detections.psexec import detect_psexec
+from lmr.detections.winrm import detect_winrm
 from lmr.graph.builder import build_attack_graph
 from lmr.report import export_findings
 from lmr.evidence import export_evidence_filters
@@ -97,12 +98,19 @@ def run_analyze(args: argparse.Namespace) -> None:
         raw_rpc = parse_zeek_tsv(log_dir / "dce_rpc.log")
         all_events.extend(normalize_zeek_logs("dce_rpc", raw_rpc))
         
+    if "http.log" in generated_logs:
+        raw_http = parse_zeek_tsv(log_dir / "http.log")
+        all_events.extend(normalize_zeek_logs("http", raw_http))
+        
     # Run the PsExec detection over the combined events
     findings = list(detect_psexec(all_events))
     
+    # Run the WinRM detection over the combined events
+    findings.extend(list(detect_winrm(all_events)))
+    
     print(f"[+] Detection complete. Found {len(findings)} lateral movement behaviors.")
     for f in findings:
-        print(f"    -> [High] {f.title} ({f.src_ip} -> {f.dst_ip})")
+        print(f"    -> [{f.confidence}] {f.title} ({f.src_ip} -> {f.dst_ip})")
         
     # Build the attack graph
     graph = build_attack_graph(findings)
@@ -115,7 +123,6 @@ def run_analyze(args: argparse.Namespace) -> None:
     print("[*] Generating evidence filters...")
     export_evidence_filters(findings, out_dir)
     
-    # Final success message moved to the very bottom
     print(f"[+] Analysis complete. Results saved to: {out_dir.absolute()}")
 
 

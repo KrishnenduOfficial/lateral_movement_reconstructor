@@ -14,14 +14,15 @@ from lmr.schema import DetectionFinding
 def generate_wireshark_filter(finding: DetectionFinding) -> str:
     """
     Constructs a precise Wireshark display filter based on the finding's IPs.
-    Future iterations can incorporate specific ports or protocols.
     """
-    # Base filter isolating traffic between the attacker and the victim
     ip_filter = f"(ip.src == {finding.src_ip} and ip.dst == {finding.dst_ip}) or (ip.src == {finding.dst_ip} and ip.dst == {finding.src_ip})"
     
-    # Add protocol-specific narrowing if we know the technique
     if finding.title == "PsExec":
         return f"({ip_filter}) and (smb or smb2 or dcerpc)"
+    
+    # NEW: Filter specifically for WinRM traffic
+    if finding.title == "WinRM Lateral Movement":
+        return f"({ip_filter}) and (http and tcp.port in {{5985 5986}})"
         
     return ip_filter
 
