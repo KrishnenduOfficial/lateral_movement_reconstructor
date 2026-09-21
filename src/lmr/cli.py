@@ -6,12 +6,15 @@ from pathlib import Path
 from lmr import __version__
 from lmr.input_check import inspect_capture_file, UnsupportedFileFormatError
 from lmr.zeek_runner import run_zeek, ZeekExecutionError
+from lmr.parsers.zeek_tsv import parse_zeek_tsv
+from lmr.schema import normalize_zeek_logs
+from lmr.detections.psexec import detect_psexec
+from lmr.graph.builder import build_attack_graph
 
 
 def run_doctor() -> None:
     """Inspects the host environment for required dependencies."""
     print(f"lmr v{__version__} System Check\n" + "-" * 40)
-
     print(f"Python Version: {sys.version.split()[0]}")
 
     zeek_path = shutil.which("zeek")
@@ -27,7 +30,6 @@ def run_doctor() -> None:
         print("[!] Docker not found.")
 
     print("-" * 40)
-    
     if docker_path or zeek_path:
         print("[READY] System meets the requirements to analyze packet captures.")
     else:
@@ -40,9 +42,8 @@ def run_doctor() -> None:
 
 
 def run_analyze(args: argparse.Namespace) -> None:
-    """Main analysis pipeline: validates input, runs Zeek, and checks log coverage."""
+    """Main analysis pipeline: validates input, runs Zeek, runs detections, builds graph."""
     case_name = args.case
-    # Create the case output directory (e.g., out/IR-001)
     out_dir = Path("out") / case_name
     out_dir.mkdir(parents=True, exist_ok=True)
     
@@ -59,7 +60,6 @@ def run_analyze(args: argparse.Namespace) -> None:
     elif args.capture:
         capture_path = Path(args.capture)
         try:
-            # 1. Validate magic bytes
             capture_format = inspect_capture_file(capture_path)
             print(f"[*] Validated input capture: {capture_path.name} ({capture_format.value})")
         except (FileNotFoundError, UnsupportedFileFormatError) as e:
@@ -69,7 +69,6 @@ def run_analyze(args: argparse.Namespace) -> None:
         log_dir = out_dir / "zeek_logs"
         print("[*] Executing Zeek (this may take a moment)...")
         try:
-            # 2. Run Zeek
             result = run_zeek(capture_path, log_dir, force_docker=args.force_docker)
             generated_logs = result.generated_logs
         except ZeekExecutionError as e:
@@ -79,14 +78,34 @@ def run_analyze(args: argparse.Namespace) -> None:
         print("[!] Error: You must provide either a capture file or --zeek-logs.")
         sys.exit(1)
         
-    # 3. Print coverage summary
     if not generated_logs:
         print("[!] No Zeek logs found or generated. Analysis cannot proceed.")
         sys.exit(1)
+
+    print("[*] Running detection engine...")
+    
+    # Check for required logs before running specific detections
+    all_events = []
+    
+    if "smb_mapping.log" in generated_logs:
+        raw_smb = parse_zeek_tsv(log_dir / "smb_mapping.log")
+        all_events.extend(normalize_zeek_logs("smb_mapping", raw_smb))
         
-    print(f"[+] Coverage Summary: Found {len(generated_logs)} Zeek logs.")
-    print(f"    -> {', '.join(generated_logs)}")
-    print("[*] Parser and detection engine will be connected in the next step!")
+    if "dce_rpc.log" in generated_logs:
+        raw_rpc = parse_zeek_tsv(log_dir / "dce_rpc.log")
+        all_events.extend(normalize_zeek_logs("dce_rpc", raw_rpc))
+        
+    # Run the PsExec detection over the combined events
+    findings = list(detect_psexec(all_events))
+    
+    print(f"[+] Detection complete. Found {len(findings)} lateral movement behaviors.")
+    for f in findings:
+        print(f"    -> [High] {f.title} ({f.src_ip} -> {f.dst_ip})")
+        
+    # Build the attack graph
+    graph = build_attack_graph(findings)
+    print(f"[+] Attack graph generated: {len(graph.nodes)} hosts, {len(graph.edges)} connections.")
+    print("[*] Milestone 1 Complete! Output generation is next.")
 
 
 def main() -> None:
@@ -100,16 +119,13 @@ def main() -> None:
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
-    # Command: lmr doctor
     subparsers.add_parser(
         "doctor", help="Check system dependencies (Zeek, Docker) and provide guidance."
     )
 
-    # Command: lmr analyze
     analyze_parser = subparsers.add_parser(
         "analyze", help="Analyze a packet capture or existing Zeek logs."
     )
-    # Positional argument for the PCAP (optional, because --zeek-logs might be used instead)
     analyze_parser.add_argument(
         "capture", nargs="?", help="Path to the .pcap or .pcapng file"
     )
