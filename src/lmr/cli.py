@@ -11,6 +11,7 @@ from lmr.schema import normalize_zeek_logs
 from lmr.detections.psexec import detect_psexec
 from lmr.graph.builder import build_attack_graph
 from lmr.report import export_findings
+from lmr.evidence import export_evidence_filters
 
 
 def run_doctor() -> None:
@@ -110,6 +111,11 @@ def run_analyze(args: argparse.Namespace) -> None:
     # Export results to disk
     print("[*] Generating reports (JSON, CSV)...")
     export_findings(findings, out_dir)
+
+    print("[*] Generating evidence filters...")
+    export_evidence_filters(findings, out_dir)
+    
+    # Final success message moved to the very bottom
     print(f"[+] Analysis complete. Results saved to: {out_dir.absolute()}")
 
 
