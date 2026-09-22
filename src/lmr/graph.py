@@ -82,4 +82,8 @@ def analyze_graph_metrics(g: nx.MultiDiGraph) -> Dict[str, Any]:
 
 def export_graph_json(g: nx.MultiDiGraph) -> Dict[str, Any]:
     """Serializes the graph into a lightweight node/link dictionary for UI visualization."""
-    return nx.node_link_data(g)
+    data = nx.node_link_data(g)
+    # NetworkX node_link_data uses 'edges' for MultiDiGraph; map it to 'links' for consistency
+    if "edges" in data and "links" not in data:
+        data["links"] = data["edges"]
+    return data

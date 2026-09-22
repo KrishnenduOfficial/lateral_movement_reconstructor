@@ -10,7 +10,7 @@ from lmr.parsers.zeek_tsv import parse_zeek_tsv
 from lmr.schema import normalize_zeek_logs
 from lmr.detections.psexec import detect_psexec
 from lmr.detections.winrm import detect_winrm
-from lmr.graph.builder import build_attack_graph
+from lmr.graph import build_attack_graph, analyze_graph_metrics
 from lmr.report import export_findings
 from lmr.evidence import export_evidence_filters
 from lmr.detections.rdp import detect_rdp
@@ -20,6 +20,7 @@ from lmr.detections.ssh import detect_ssh
 from lmr.detections.linux_infra import detect_linux_infra
 from lmr.detections.kerberos import detect_kerberos
 from lmr.detections.ntlm import detect_ntlm
+from lmr.report import export_findings, export_interactive_html
 
 
 def run_doctor() -> None:
@@ -170,6 +171,12 @@ def run_analyze(args: argparse.Namespace) -> None:
 
     print("[*] Generating evidence filters...")
     export_evidence_filters(findings, out_dir)
+
+    metrics = analyze_graph_metrics(graph)
+    html_path = out_dir / "report.html"
+    print("[*] Generating interactive attack graph webpage...")
+    export_interactive_html(findings, metrics, html_path)
+    print(f"[+] Interactive visualizer saved to: {html_path.absolute()}")
     
     print(f"[+] Analysis complete. Results saved to: {out_dir.absolute()}")
 
