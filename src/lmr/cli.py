@@ -13,6 +13,7 @@ from lmr.detections.winrm import detect_winrm
 from lmr.graph.builder import build_attack_graph
 from lmr.report import export_findings
 from lmr.evidence import export_evidence_filters
+from lmr.detections.rdp import detect_rdp
 
 
 def run_doctor() -> None:
