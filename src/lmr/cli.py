@@ -15,6 +15,7 @@ from lmr.report import export_findings
 from lmr.evidence import export_evidence_filters
 from lmr.detections.rdp import detect_rdp
 from lmr.detections.wmi import detect_wmi
+from lmr.detections.smb import detect_smb
 
 
 def run_doctor() -> None:
@@ -119,6 +120,9 @@ def run_analyze(args: argparse.Namespace) -> None:
 
     # Run the WMI/DCOM detection over the combined events
     findings.extend(list(detect_wmi(all_events)))
+
+    # Run the SMB Admin Share detection over the combined events
+    findings.extend(list(detect_smb(all_events)))
     
     print(f"[+] Detection complete. Found {len(findings)} lateral movement behaviors.")
     for f in findings:

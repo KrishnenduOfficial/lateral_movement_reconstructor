@@ -26,6 +26,9 @@ def generate_wireshark_filter(finding: DetectionFinding) -> str:
 
     if finding.title == "WMI/DCOM Lateral Movement":
         return f"({ip_filter}) and (tcp.port == 135 or dcerpc)"
+
+    if finding.title == "SMB Admin Share Lateral Movement":
+        return f"({ip_filter}) and (tcp.port == 445 or smb or smb2)"
         
     return ip_filter
 
