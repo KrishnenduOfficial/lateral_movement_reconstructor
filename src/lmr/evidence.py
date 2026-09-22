@@ -41,6 +41,12 @@ def generate_wireshark_filter(finding: DetectionFinding) -> str:
     
     if finding.title == "Linux Lateral Movement: Docker API Remote Container Spawn":
         return f"({ip_filter}) and tcp.port == 2375"
+
+    if finding.title == "Kerberoasting (Weak Cipher TGS Request)":
+        return f"({ip_filter}) and kerberos"
+
+    if "NTLM Credential Spraying" in finding.title or "NTLM Pass-the-Hash" in finding.title:
+        return f"({ip_filter}) and ntlmssp"
         
     return ip_filter
 

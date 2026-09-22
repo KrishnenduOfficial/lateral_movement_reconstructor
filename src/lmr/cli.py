@@ -18,6 +18,8 @@ from lmr.detections.wmi import detect_wmi
 from lmr.detections.smb import detect_smb
 from lmr.detections.ssh import detect_ssh
 from lmr.detections.linux_infra import detect_linux_infra
+from lmr.detections.kerberos import detect_kerberos
+from lmr.detections.ntlm import detect_ntlm
 
 
 def run_doctor() -> None:
@@ -116,8 +118,16 @@ def run_analyze(args: argparse.Namespace) -> None:
         all_events.extend(normalize_zeek_logs("ssh", raw_ssh))
 
     if "conn.log" in generated_logs:
-     raw_conn = parse_zeek_tsv(log_dir / "conn.log")
-     all_events.extend(normalize_zeek_logs("conn", raw_conn))
+        raw_conn = parse_zeek_tsv(log_dir / "conn.log")
+        all_events.extend(normalize_zeek_logs("conn", raw_conn))
+
+    if "kerberos.log" in generated_logs:
+        raw_kerb = parse_zeek_tsv(log_dir / "kerberos.log")
+        all_events.extend(normalize_zeek_logs("kerberos", raw_kerb))
+
+    if "ntlm.log" in generated_logs:
+        raw_ntlm = parse_zeek_tsv(log_dir / "ntlm.log")
+        all_events.extend(normalize_zeek_logs("ntlm", raw_ntlm))
         
     # Run the PsExec detection over the combined events
     findings = list(detect_psexec(all_events))
@@ -139,6 +149,12 @@ def run_analyze(args: argparse.Namespace) -> None:
 
     # Run the Linux Infrastructure detection over the combined events
     findings.extend(list(detect_linux_infra(all_events)))
+
+    # Run the Kerberos detection over the combined events
+    findings.extend(list(detect_kerberos(all_events)))
+
+    # Run the NTLM detection over the combined events
+    findings.extend(list(detect_ntlm(all_events)))
     
     print(f"[+] Detection complete. Found {len(findings)} lateral movement behaviors.")
     for f in findings:
