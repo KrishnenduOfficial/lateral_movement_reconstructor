@@ -16,6 +16,7 @@ from lmr.evidence import export_evidence_filters
 from lmr.detections.rdp import detect_rdp
 from lmr.detections.wmi import detect_wmi
 from lmr.detections.smb import detect_smb
+from lmr.detections.ssh import detect_ssh
 
 
 def run_doctor() -> None:
@@ -108,6 +109,10 @@ def run_analyze(args: argparse.Namespace) -> None:
     if "rdp.log" in generated_logs:
         raw_rdp = parse_zeek_tsv(log_dir / "rdp.log")
         all_events.extend(normalize_zeek_logs("rdp", raw_rdp))
+
+    if "ssh.log" in generated_logs:
+        raw_ssh = parse_zeek_tsv(log_dir / "ssh.log")
+        all_events.extend(normalize_zeek_logs("ssh", raw_ssh))
         
     # Run the PsExec detection over the combined events
     findings = list(detect_psexec(all_events))
@@ -123,6 +128,9 @@ def run_analyze(args: argparse.Namespace) -> None:
 
     # Run the SMB Admin Share detection over the combined events
     findings.extend(list(detect_smb(all_events)))
+
+    # Run the SSH detection over the combined events
+    findings.extend(list(detect_ssh(all_events)))
     
     print(f"[+] Detection complete. Found {len(findings)} lateral movement behaviors.")
     for f in findings:
