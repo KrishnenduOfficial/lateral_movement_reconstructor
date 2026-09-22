@@ -101,12 +101,19 @@ def run_analyze(args: argparse.Namespace) -> None:
     if "http.log" in generated_logs:
         raw_http = parse_zeek_tsv(log_dir / "http.log")
         all_events.extend(normalize_zeek_logs("http", raw_http))
+
+    if "rdp.log" in generated_logs:
+     raw_rdp = parse_zeek_tsv(log_dir / "rdp.log")
+     all_events.extend(normalize_zeek_logs("rdp", raw_rdp))
         
     # Run the PsExec detection over the combined events
     findings = list(detect_psexec(all_events))
     
     # Run the WinRM detection over the combined events
     findings.extend(list(detect_winrm(all_events)))
+
+    # Run the RDP detection over the combined events
+    findings.extend(list(detect_rdp(all_events)))
     
     print(f"[+] Detection complete. Found {len(findings)} lateral movement behaviors.")
     for f in findings:
