@@ -23,6 +23,9 @@ def generate_wireshark_filter(finding: DetectionFinding) -> str:
     # NEW: Filter specifically for WinRM traffic
     if finding.title == "WinRM Lateral Movement":
         return f"({ip_filter}) and (http and tcp.port in {{5985 5986}})"
+
+    if finding.title == "WMI/DCOM Lateral Movement":
+        return f"({ip_filter}) and (tcp.port == 135 or dcerpc)"
         
     return ip_filter
 
