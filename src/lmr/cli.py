@@ -103,8 +103,8 @@ def run_analyze(args: argparse.Namespace) -> None:
         all_events.extend(normalize_zeek_logs("http", raw_http))
 
     if "rdp.log" in generated_logs:
-     raw_rdp = parse_zeek_tsv(log_dir / "rdp.log")
-     all_events.extend(normalize_zeek_logs("rdp", raw_rdp))
+        raw_rdp = parse_zeek_tsv(log_dir / "rdp.log")
+        all_events.extend(normalize_zeek_logs("rdp", raw_rdp))
         
     # Run the PsExec detection over the combined events
     findings = list(detect_psexec(all_events))
