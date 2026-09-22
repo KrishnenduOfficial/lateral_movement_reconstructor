@@ -32,6 +32,15 @@ def generate_wireshark_filter(finding: DetectionFinding) -> str:
 
     if finding.title == "SSH Lateral Movement":
         return f"({ip_filter}) and tcp.port == 22"
+
+    if finding.title == "Linux Lateral Movement: NFS Share Mount":
+        return f"({ip_filter}) and tcp.port == 2049"
+    
+    if finding.title == "Linux Lateral Movement: Redis Daemon Unauthorized Pivot":
+        return f"({ip_filter}) and tcp.port == 6379"
+    
+    if finding.title == "Linux Lateral Movement: Docker API Remote Container Spawn":
+        return f"({ip_filter}) and tcp.port == 2375"
         
     return ip_filter
 
