@@ -10,6 +10,7 @@ import json
 from dataclasses import asdict
 from pathlib import Path
 from typing import List
+from lmr.evidence import generate_wireshark_filter
 
 from lmr.schema import DetectionFinding
 
@@ -47,3 +48,19 @@ def export_findings(findings: List[DetectionFinding], out_dir: Path) -> None:
                     for k, v in row.items()
                 }
                 writer.writerow(csv_row)
+
+def export_wireshark_script(findings, output_path) -> None:
+    """Combines all unique Wireshark filters into a single shell script."""
+    filters = set()
+    for f in findings:
+        wf = generate_wireshark_filter(f)
+        if wf:
+            filters.add(wf)
+
+    combined_filter = " or ".join(f"({flt})" for flt in sorted(filters)) if filters else "frame"
+
+    with open(output_path, "w", encoding="utf-8") as fp:
+        fp.write("#!/bin/sh\n")
+        fp.write("# Auto-generated LMR Wireshark Tshark display filter\n")
+        fp.write(f'WIRESHARK_FILTER="{combined_filter}"\n')
+        fp.write('echo "Combined filter: $WIRESHARK_FILTER"\n')
