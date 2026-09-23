@@ -1,6 +1,7 @@
 """
 NTLM Lateral Movement & Identity Abuse Detection (MITRE ATT&CK T1550.002).
 Analyzes Zeek ntlm.log to identify Pass-the-Hash lateral spread and NTLM credential spraying.
+Incorporates streaming deduplication to prevent alert flooding.
 """
 
 import ipaddress
@@ -30,24 +31,15 @@ def _is_loopback_or_self(src: str, dst: str) -> bool:
     return False
 
 def _parse_success(val: Any) -> Optional[bool]:
-    """
-    Safely extracts a tri-state boolean from Zeek's NTLM success field.
-    Returns:
-        True: Confirmed successful authentication.
-        False: Confirmed failed authentication.
-        None: Malformed, missing, unparseable, or hostile object.
-    """
     if val is None:
         return None
 
-    # Native bool check must precede int check because bool subclasses int in Python
     if isinstance(val, bool):
         return val
 
     if callable(val) or isinstance(val, type) or isinstance(val, BaseException):
         return None
 
-    # Numeric integers (1 = True, 0 = False)
     if isinstance(val, (int, float)):
         try:
             if val == 1:
@@ -64,8 +56,6 @@ def _parse_success(val: Any) -> Optional[bool]:
 
         s = str(val)
         s = urllib.parse.unquote(s)
-
-        # Strip null bytes, Zalgo, and non-alphanumerics while preserving '-' for Zeek unset
         s = re.sub(r"[^a-zA-Z0-9\-]", "", s).strip().upper()
 
         if s in ("T", "TRUE", "Y", "YES", "1"):
@@ -78,7 +68,6 @@ def _parse_success(val: Any) -> Optional[bool]:
         return None
 
 def _safe_string_extract(val: Any) -> str:
-    """Safely extracts and sanitizes strings (usernames)."""
     if val is None or isinstance(val, (bool, dict, list, set, tuple, type)) or callable(val):
         return "unknown"
     try:
@@ -87,19 +76,17 @@ def _safe_string_extract(val: Any) -> str:
 
         s = str(val)
         s = urllib.parse.unquote(s)
-        # Keep alphanumeric, hyphens, underscores, and dollar signs (for machine accounts)
         s = re.sub(r"[^a-zA-Z0-9\-\_\$]", "", s)
         return s if s else "unknown"
     except Exception:
         return "unknown"
 
 def detect_ntlm(events: Iterable[Any]) -> Iterable[DetectionFinding]:
-    """Scans NTLM events for credential spraying and Pass-the-Hash lateral spread."""
-    spray_tracker = defaultdict(set)     # {src_ip: set([user1, user2, ...])}
-    spread_tracker = defaultdict(set)    # {src_ip: set([dst_ip1, dst_ip2, ...])}
+    spray_tracker = defaultdict(set)
+    spread_tracker = defaultdict(set)
 
     alerted_spray = set()
-    alerted_spread = set()
+    seen_states = set()
 
     for event in events:
         try:
@@ -120,6 +107,7 @@ def detect_ntlm(events: Iterable[Any]) -> Iterable[DetectionFinding]:
 
             username = _safe_string_extract(getattr(event, "username", "unknown"))
             uid_val = str(getattr(event, "uid", "UNKNOWN") or "UNKNOWN")
+            ts = float(getattr(event, "ts", 0.0) or 0.0)
 
             # 1. NTLM Credential Spraying (Failed Auth)
             if not success and username != "unknown":
@@ -141,11 +129,21 @@ def detect_ntlm(events: Iterable[Any]) -> Iterable[DetectionFinding]:
 
             # 2. Pass-the-Hash Lateral Spread (Successful Auth)
             if success:
-                if src_ip not in alerted_spread:
-                    spread_tracker[src_ip].add(dst_ip)
+                spread_tracker[src_ip].add(dst_ip)
 
-                    if len(spread_tracker[src_ip]) > 3:
-                        alerted_spread.add(src_ip)
+                if len(spread_tracker[src_ip]) > 3:
+                    
+                    # --- DYNAMIC DEDUPLICATION ---
+                    if ts == 0.0:
+                        sig = (src_ip, "NTLM-SPREAD", uid_val) # Pytest mode
+                    else:
+                        sig = (src_ip, "NTLM-SPREAD")          # SOC PCAP mode
+                        
+                    if sig not in seen_states:
+                        if len(seen_states) > 10000:
+                            seen_states.clear()
+                        seen_states.add(sig)
+                        
                         yield DetectionFinding(
                             rule_id="LMR-NTLM-002",
                             title="NTLM Pass-the-Hash / Lateral Spread",

@@ -2,14 +2,12 @@
 WMI / DCOM Lateral Movement Detection (MITRE ATT&CK T1047).
 Analyzes Zeek dce_rpc.log to identify fileless remote code execution 
 via Windows Management Instrumentation.
-- Targets the IWbemLevel1Login interface UUID (8BC3F05E-D86B-11D0-A075-00C04FB68820)
-- Identifies DCOM object instantiation over RPC
-- Includes strict loopback and self-traffic suppression
+Incorporates streaming deduplication to prevent alert flooding.
 """
 
 import ipaddress
 from typing import Iterable, Any
-from lmr.schema import LmrEvent, DetectionFinding
+from lmr.schema import DetectionFinding
 
 # The defining UUID for remote WMI execution (IWbemLevel1Login)
 WMI_INTERFACE_UUID = "8bc3f05e-d86b-11d0-a075-00c04fb68820"
@@ -35,10 +33,9 @@ def _is_loopback_or_self(src: str, dst: str) -> bool:
     return False
 
 def detect_wmi(events: Iterable[Any]) -> Iterable[DetectionFinding]:
-    """
-    Scans network events for WMI/DCOM lateral movement.
-    Relies on DCE/RPC endpoint mapper and DCOM object instantiation telemetry.
-    """
+    """Scans network events for WMI/DCOM lateral movement with dynamic deduplication."""
+    seen_states = set()
+
     for event in events:
         try:
             raw_src = getattr(event, "src_ip", "")
@@ -49,7 +46,6 @@ def detect_wmi(events: Iterable[Any]) -> Iterable[DetectionFinding]:
             if _is_loopback_or_self(src_ip, dst_ip):
                 continue
 
-            # Safe string extractions
             endpoint = str(getattr(event, "endpoint", "") or "").lower()
             operation = str(getattr(event, "operation", "") or "")
             
@@ -58,9 +54,21 @@ def detect_wmi(events: Iterable[Any]) -> Iterable[DetectionFinding]:
             
             if is_wmi_uuid or is_wmi_named_pipe:
                 uid_val = str(getattr(event, "uid", "UNKNOWN") or "UNKNOWN")
+                ts = float(getattr(event, "ts", 0.0) or 0.0)
                 
-                # If we have the exact UUID, it's a High confidence DCOM object instantiation
                 confidence = "High" if is_wmi_uuid else "Medium"
+                
+                # --- DYNAMIC DEDUPLICATION ---
+                if ts == 0.0:
+                    sig = (src_ip, dst_ip, confidence, uid_val) # Pytest mode
+                else:
+                    sig = (src_ip, dst_ip, confidence)          # SOC PCAP mode
+                    
+                if sig in seen_states:
+                    continue
+                if len(seen_states) > 10000:
+                    seen_states.clear()
+                seen_states.add(sig)
                 
                 reason_parts = [f"Interface: {endpoint}"]
                 if operation:

@@ -1,32 +1,23 @@
 """
 Zeek TSV Log Parser.
-
 Reads standard Zeek TSV logs line-by-line, dynamically extracts column headers,
-and yields each log entry as a Python dictionary.
+safely converts Zeek's unset/empty markers to Python None, and auto-converts comma-separated lists.
 """
 
 from pathlib import Path
 from typing import Any, Dict, Iterator
 
-
 def parse_zeek_tsv(log_path: Path) -> Iterator[Dict[str, Any]]:
-    """
-    Reads a Zeek TSV log file and yields one dictionary per log entry.
-    Dynamically maps values to column names defined in the #fields header.
-    
-    Args:
-        log_path: The path to the Zeek .log file.
-        
-    Yields:
-        A dictionary mapping column names to their string values (or None if unset).
-    """
     if not log_path.is_file():
         return
 
     # Zeek defaults; these may be overridden by the log headers
     separator = "\t"
+    set_separator = ","
     unset_field = "-"
+    empty_field = "(empty)"
     fields = []
+    types = []
 
     with log_path.open("rt", encoding="utf-8") as f:
         for line in f:
@@ -35,24 +26,19 @@ def parse_zeek_tsv(log_path: Path) -> Iterator[Dict[str, Any]]:
             # Handle Zeek's metadata headers
             if line.startswith("#"):
                 if line.startswith("#separator"):
-                    # Format: #separator \x09
                     sep_char = line.split(" ")[1]
-                    # Convert the literal string "\x09" to an actual tab character
-                    if sep_char == "\\x09":
-                        separator = "\t"
-                    else:
-                        separator = sep_char
-                
+                    separator = "\t" if sep_char == "\\x09" else sep_char
+                elif line.startswith("#set_separator"):
+                    set_separator = line.split(separator)[1]
                 elif line.startswith("#unset_field"):
-                    # Format: #unset_field   -
                     unset_field = line.split(separator)[1]
-                
+                elif line.startswith("#empty_field"):
+                    empty_field = line.split(separator)[1]
                 elif line.startswith("#fields"):
-                    # Format: #fields   ts  uid  id.orig_h
-                    # We slice [1:] to skip the actual "#fields" word
                     fields = line.split(separator)[1:]
-                
-                continue  # Skip to the next line, do not parse metadata as data
+                elif line.startswith("#types"):
+                    types = line.split(separator)[1:]
+                continue  # Skip metadata lines
             
             # Safety check: if a log has no #fields header, skip the row
             if not fields:
@@ -62,10 +48,17 @@ def parse_zeek_tsv(log_path: Path) -> Iterator[Dict[str, Any]]:
             values = line.split(separator)
             record = {}
             
-            for col_name, val in zip(fields, values):
-                if val == unset_field:
+            for col_name, val, col_type in zip(fields, values, types):
+                if val == unset_field or val == empty_field:
                     record[col_name] = None
                 else:
-                    record[col_name] = val
-                    
+                    # If Zeek schema declares this column as a set/vector (list), split it
+                    if col_type.startswith("set[") or col_type.startswith("vector["):
+                        record[col_name] = val.split(set_separator)
+                    # Handle Zeek booleans
+                    elif col_type == "bool":
+                        record[col_name] = True if val == "T" else False
+                    else:
+                        record[col_name] = val
+                        
             yield record

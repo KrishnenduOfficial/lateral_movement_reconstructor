@@ -95,67 +95,58 @@ def run_analyze(args: argparse.Namespace) -> None:
 
     print("[*] Running detection engine...")
     
-    # Check for required logs before running specific detections
+    # Robust dynamic log ingestion mapping
     all_events = []
-    
-    if "smb_mapping.log" in generated_logs:
-        raw_smb = parse_zeek_tsv(log_dir / "smb_mapping.log")
-        all_events.extend(normalize_zeek_logs("smb_mapping", raw_smb))
-        
-    if "dce_rpc.log" in generated_logs:
-        raw_rpc = parse_zeek_tsv(log_dir / "dce_rpc.log")
-        all_events.extend(normalize_zeek_logs("dce_rpc", raw_rpc))
-        
-    if "http.log" in generated_logs:
-        raw_http = parse_zeek_tsv(log_dir / "http.log")
-        all_events.extend(normalize_zeek_logs("http", raw_http))
+    log_file_mapping = {
+        "smb_mapping.log": "smb_mapping",
+        "smb_files.log": "smb_files",
+        "dce_rpc.log": "dce_rpc",
+        "http.log": "http",
+        "rdp.log": "rdp",
+        "ssh.log": "ssh",
+        "conn.log": "conn",
+        "kerberos.log": "kerberos",
+        "ntlm.log": "ntlm",
+    }
 
-    if "rdp.log" in generated_logs:
-        raw_rdp = parse_zeek_tsv(log_dir / "rdp.log")
-        all_events.extend(normalize_zeek_logs("rdp", raw_rdp))
+    loaded_logs_count = 0
+    for log_filename, log_type in log_file_mapping.items():
+        log_path = log_dir / log_filename
+        if log_path.is_file():
+            try:
+                raw_data = list(parse_zeek_tsv(log_path)) # <--- Cast to list here
+                if raw_data:
+                    normalized = list(normalize_zeek_logs(log_type, raw_data)) # <--- Cast to list here
+                    all_events.extend(normalized)
+                    loaded_logs_count += 1
+                    print(f"[*] Loaded {len(normalized)} events from {log_filename}")
+            except Exception as e:
+                print(f"[!] Warning: Failed to parse {log_filename}: {e}")
 
-    if "ssh.log" in generated_logs:
-        raw_ssh = parse_zeek_tsv(log_dir / "ssh.log")
-        all_events.extend(normalize_zeek_logs("ssh", raw_ssh))
+    if loaded_logs_count == 0:
+        print("[!] Warning: No recognizable Zeek log files contained data records.")
 
-    if "conn.log" in generated_logs:
-        raw_conn = parse_zeek_tsv(log_dir / "conn.log")
-        all_events.extend(normalize_zeek_logs("conn", raw_conn))
+    # Run all detection modules securely with error handling
+    findings = []
+    detectors = [
+        ("PsExec", detect_psexec),
+        ("WinRM", detect_winrm),
+        ("RDP", detect_rdp),
+        ("WMI/DCOM", detect_wmi),
+        ("SMB Admin Share", detect_smb),
+        ("SSH", detect_ssh),
+        ("Linux Infrastructure", detect_linux_infra),
+        ("Kerberos", detect_kerberos),
+        ("NTLM", detect_ntlm)
+    ]
 
-    if "kerberos.log" in generated_logs:
-        raw_kerb = parse_zeek_tsv(log_dir / "kerberos.log")
-        all_events.extend(normalize_zeek_logs("kerberos", raw_kerb))
-
-    if "ntlm.log" in generated_logs:
-        raw_ntlm = parse_zeek_tsv(log_dir / "ntlm.log")
-        all_events.extend(normalize_zeek_logs("ntlm", raw_ntlm))
-        
-    # Run the PsExec detection over the combined events
-    findings = list(detect_psexec(all_events))
-    
-    # Run the WinRM detection over the combined events
-    findings.extend(list(detect_winrm(all_events)))
-
-    # Run the RDP detection over the combined events
-    findings.extend(list(detect_rdp(all_events)))
-
-    # Run the WMI/DCOM detection over the combined events
-    findings.extend(list(detect_wmi(all_events)))
-
-    # Run the SMB Admin Share detection over the combined events
-    findings.extend(list(detect_smb(all_events)))
-
-    # Run the SSH detection over the combined events
-    findings.extend(list(detect_ssh(all_events)))
-
-    # Run the Linux Infrastructure detection over the combined events
-    findings.extend(list(detect_linux_infra(all_events)))
-
-    # Run the Kerberos detection over the combined events
-    findings.extend(list(detect_kerberos(all_events)))
-
-    # Run the NTLM detection over the combined events
-    findings.extend(list(detect_ntlm(all_events)))
+    for name, detector_func in detectors:
+        try:
+            module_findings = list(detector_func(all_events))
+            if module_findings:
+                findings.extend(module_findings)
+        except Exception as e:
+            print(f"[!] Warning in {name} detector: {e}")
     
     print(f"[+] Detection complete. Found {len(findings)} lateral movement behaviors.")
     for f in findings:

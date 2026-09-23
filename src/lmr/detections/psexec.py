@@ -33,7 +33,7 @@ def detect_psexec(events: Iterator[LmrEvent]) -> Iterator[DetectionFinding]:
         for ev in pair_events:
             # Check for hidden admin share mapping
             if ev.service == "smb_mapping" and ev.action == "Share Mapped":
-                if "ADMIN$" in ev.detail.upper() or "C$" in ev.detail.upper():
+                if ev.detail and ("ADMIN$" in ev.detail.upper() or "C$" in ev.detail.upper()):
                     admin_share_uids.append(ev.uid)
             
             # Check for remote service manipulation

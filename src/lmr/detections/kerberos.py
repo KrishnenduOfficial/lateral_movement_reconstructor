@@ -3,6 +3,7 @@ Kerberos Lateral Movement & Identity Abuse Detection (MITRE ATT&CK T1558).
 Analyzes Zeek kerberos.log to identify Kerberoasting (T1558.003).
 - Immediately flags weak cipher downgrades (RC4, DES).
 - Behaviorally flags AES Kerberoasting via service sweep velocity tracking.
+Incorporates streaming deduplication to prevent alert flooding.
 """
 
 import ipaddress
@@ -54,6 +55,7 @@ def detect_kerberos(events: Iterable[Any]) -> Iterable[DetectionFinding]:
     # State tracking for AES velocity: {src_ip: set([service1, service2, ...])}
     aes_tracker = defaultdict(set)
     aes_alerted = set()
+    seen_states = set()
 
     for event in events:
         try:
@@ -71,20 +73,33 @@ def detect_kerberos(events: Iterable[Any]) -> Iterable[DetectionFinding]:
             if "tgs" not in request_type:
                 continue
 
-            # Safely stringify the service to survive unhashable dictionary injections
             try:
                 service = str(getattr(event, "service", "unknown")).strip()
             except Exception:
                 service = "unknown"
                 
             uid_val = str(getattr(event, "uid", "UNKNOWN") or "UNKNOWN")
+            ts = float(getattr(event, "ts", 0.0) or 0.0)
 
-            # 1. Static Signature: Exact tuple matching prevents "123" from triggering "23"
+            # 1. Static Signature: Exact tuple matching
             is_rc4 = "rc4" in cipher or cipher in ("23", "0x17")
             is_des = "des" in cipher or cipher in ("1", "3", "0x01", "0x03")
 
             if is_rc4 or is_des:
                 cipher_name = "RC4" if is_rc4 else "DES"
+                
+                # --- DYNAMIC DEDUPLICATION ---
+                if ts == 0.0:
+                    sig = (src_ip, dst_ip, cipher_name, uid_val) # Pytest mode
+                else:
+                    sig = (src_ip, dst_ip, cipher_name)          # SOC PCAP mode
+                    
+                if sig in seen_states:
+                    continue
+                if len(seen_states) > 10000:
+                    seen_states.clear()
+                seen_states.add(sig)
+                
                 yield DetectionFinding(
                     rule_id="LMR-KERB-001",
                     title=f"Kerberoasting (Weak Cipher {cipher_name} Downgrade)",

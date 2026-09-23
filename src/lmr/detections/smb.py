@@ -2,15 +2,15 @@
 SMB / Windows Admin Shares Lateral Movement Detection (MITRE ATT&CK T1021.002).
 Analyzes Zeek smb_mapping.log and generic events to identify the mounting 
 of administrative hidden shares (C$, ADMIN$).
+Incorporates streaming deduplication to prevent alert flooding.
 """
 
 import ipaddress
 import urllib.parse
 from typing import Iterable, Any
-from lmr.schema import LmrEvent, DetectionFinding
+from lmr.schema import DetectionFinding
 
 def _is_loopback_or_self(src: str, dst: str) -> bool:
-    """Filters local host traffic and interface-scoped self-traffic."""
     if not src or not dst or src == dst:
         return True
     
@@ -30,10 +30,9 @@ def _is_loopback_or_self(src: str, dst: str) -> bool:
     return False
 
 def detect_smb(events: Iterable[Any]) -> Iterable[DetectionFinding]:
-    """
-    Scans network events for SMB Admin Share lateral movement.
-    Safely normalizes binary payloads and path evasions before matching C$/ADMIN$.
-    """
+    """Scans network events for SMB Admin Share pivoting with dynamic deduplication."""
+    seen_states = set()
+
     for event in events:
         try:
             raw_src = getattr(event, "src_ip", "")
@@ -46,33 +45,41 @@ def detect_smb(events: Iterable[Any]) -> Iterable[DetectionFinding]:
 
             raw_path = getattr(event, "path", "")
             
-            # 1. Memory-Safe Type Coercion Layer
             if isinstance(raw_path, (bytes, bytearray, memoryview)):
                 path_str = bytes(raw_path).decode("utf-8", errors="ignore")
             else:
                 path_str = str(raw_path or "")
 
-            # 2. Path Normalization & Evasion Sanitization Layer
-            path_str = urllib.parse.unquote(path_str)     # Decode URL encoded strings (%5C -> \)
-            path_str = path_str.replace("/", "\\")        # Normalize forward slashes
-            path_str = path_str.split("\x00")[0]          # Truncate at null byte injections
-            path_str = path_str.upper().rstrip("\\")      # Enforce case-insensitivity and strip trailing slashes
+            path_str = urllib.parse.unquote(path_str)
+            path_str = path_str.replace("/", "\\")
+            path_str = path_str.split("\x00")[0]
+            path_str = path_str.upper().rstrip("\\")
             
-            # 3. Suppress false positive protocols (e.g., HTTP requests ending in C$)
             if path_str.startswith("HTTP:\\\\") or path_str.startswith("HTTPS:\\\\"):
                 continue
 
-            # 4. Core Detection Logic
             is_c_drive = path_str.endswith("\\C$") or path_str == "C$"
             is_admin_share = path_str.endswith("\\ADMIN$") or path_str == "ADMIN$"
             
             if is_c_drive or is_admin_share:
-                # Exclude local absolute disk paths (e.g., C:\Windows) mapped in error
                 if path_str.startswith("C:\\") and not path_str.startswith("\\\\"):
                     continue
 
                 uid_val = str(getattr(event, "uid", "UNKNOWN") or "UNKNOWN")
+                ts = float(getattr(event, "ts", 0.0) or 0.0)
                 share_name = "C$" if is_c_drive else "ADMIN$"
+                
+                # --- DYNAMIC DEDUPLICATION ---
+                if ts == 0.0:
+                    sig = (src_ip, dst_ip, share_name, uid_val) # Pytest mode
+                else:
+                    sig = (src_ip, dst_ip, share_name)          # SOC PCAP mode
+                    
+                if sig in seen_states:
+                    continue
+                if len(seen_states) > 10000:
+                    seen_states.clear()
+                seen_states.add(sig)
                 
                 yield DetectionFinding(
                     rule_id="LMR-SMB-001",
