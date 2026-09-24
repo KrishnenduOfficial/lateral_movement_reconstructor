@@ -1,99 +1,182 @@
-# Lateral Movement Reconstructor (lmr)
+﻿# Lateral Movement Reconstructor (LMR)
 
-Reconstruct attacker lateral movement from a network capture, and see the proof behind every finding.
+<div align="center">
 
-> **Status: Milestone 1 Complete (Active Development).** The core analysis pipeline (Zeek execution, log parsing, unified schema, detection engine, and attack graph builder) is functional. The CLI successfully detects PsExec lateral movement. Final report generation (HTML/JSON) and remaining detections are currently in development.
+[![LMR CI Pipeline](https://github.com/your-username/lateral_movement_detector/actions/workflows/ci.yml/badge.svg)](https://github.com/your-username/lateral_movement_detector/actions/workflows/ci.yml)
+![Python Version](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
 
-## What it does
+<p><strong>Automated DFIR Network Analysis & Threat Hunting Engine</strong></p>
 
-Give it a PCAP (or existing Zeek logs). It will:
+</div>
 
-1. Discover protocols, hosts, ports, domains, and accounts on its own, with no port or protocol input from you.
-2. Detect lateral movement techniques.
-3. Rebuild the attacker's path across hosts as a graph and timeline.
-4. Produce a report where every finding shows exactly why it fired, with evidence you can verify independently.
+---
 
-## Design principles
+## Overview
 
-- **One command.** You provide the capture path and a case name. Nothing else is required.
-- **No port assumptions.** Detections rely on the protocol Zeek identifies plus behavior, not on a fixed port number alone.
-- **Proof for every finding.** Each finding lists the matched conditions, the Zeek connection UIDs, timestamps, a Wireshark filter, and a PCAP slice of just that traffic.
-- **Explainable confidence.** Scores show what raised and lowered them. No black box.
-- **Honest limits.** The tool reports what it could not analyze, such as missing logs or encrypted traffic. It does not claim to detect everything.
+**Lateral Movement Reconstructor (LMR)** is an automated Incident Response pipeline designed to ingest network packet captures (`.pcap`/`.pcapng`) and Zeek logs, detect lateral movement behaviors without alert flooding, and generate interactive graph visualizations. 
 
-## Supported detections (v0.1 Target)
+Built specifically for SOC analysts and incident responders, LMR replaces noisy, per-packet security alerts with high-fidelity, host-to-host pivot chains mapped directly to the **MITRE ATT&CK®** framework.
 
-| Technique | ATT&CK | Zeek evidence | Status |
-|---|---|---|---|
-| SMB / PsExec-style remote execution | T1021.002, T1569.002 | smb_mapping, smb_files, dce_rpc | Active |
-| WinRM | T1021.006 | http, conn | Planned |
-| RDP | T1021.001 | rdp | Planned |
-| Kerberoasting | T1558.003 | kerberos | Planned |
-| DCSync | T1003.006 | dce_rpc | Planned |
-| NTLM / pass-the-hash (heuristic) | T1550.002 | ntlm | Planned |
+---
 
-*Out of scope for v0.1: C2 detection, malware analysis, machine learning, and WMI/DCOM/SSH lateral movement.*
+## Key Features
 
-## How it works
+* **Streaming Deduplication Engine:** Implements the `seen_states` deduplication pattern to compress tens of thousands of raw network frames into actionable, unique attack edges while preserving protocol-level details.
+* **Multi-Protocol ATT&CK Detection:** Out-of-the-box analyzers covering primary enterprise pivot methods:
+  * **PsExec / Service Execution:** Remote service creation over SMB/DCE-RPC.
+  * **WinRM:** Remote PowerShell administration over HTTP/HTTPS.
+  * **RDP:** Remote Desktop ingress, egress, and lateral sessions.
+  * **SMB:** Administrative share access (`ADMIN$`, `C$`, `IPC$`).
+  * **WMI / DCOM:** Remote process invocation.
+  * **SSH & Linux Infrastructure:** Pivot paths targeting Linux servers.
+  * **Kerberos & NTLM:** Authentication protocol inspection and credential relay detection.
+* **Dual Ingestion Engine:** Automates Zeek parsing (locally on Linux or containerized via Docker on Windows/macOS) or ingests pre-existing Zeek TSV logs directly.
+* **Interactive Attack Graphs:** Automatically compiles findings into standalone, interactive HTML reports featuring visual graph exploration, blast radius calculation, and triage metrics.
+* **Forensic Evidence Filters:** Exports ready-to-use Wireshark display filters and Zeek query strings corresponding directly to detected incidents.
 
-    PCAP -> Zeek -> structured logs -> lmr -> report + evidence
-           (parse)                    (detect, correlate, graph, score)
+---
 
-Zeek does the protocol decoding. lmr does the detection, correlation, scoring, and reporting on top of it.
+## Architecture Pipeline
+
+```text
+[ Raw PCAP / PCAPNG ] 
+          │
+          ▼
+   Zeek Parser Layer (Native or Dockerized)
+          │
+          ▼
+  Log Normalization (Schema mapping, null byte/empty set handling)
+          │
+          ▼
+ Detection Engine (9 Independent ATT&CK modules with streaming dedup)
+          │
+          ▼
+   NetworkX Graph Assembly & Metric Analysis
+          │
+          ▼
+[ Evidence Artifacts: report.html | findings.json | evidence_filters.csv ]
+
+```
+
+---
+
+## System Requirements
+
+* **Python:** Version 3.11 or 3.12
+* **Packet Dissection Engine:**
+* **Linux:** Local `zeek` installation in `PATH`.
+* **Windows / macOS:** [Docker Desktop](https://www.docker.com/products/docker-desktop/?utm_source=gemini) (used to run an isolated, containerized Zeek analyzer).
+
+
+
+---
+
+## Installation
+
+LMR uses modern PEP 621 packaging (`pyproject.toml`).
+
+```bash
+# 1. Clone the repository
+git clone [https://github.com/your-username/lateral_movement_detector.git](https://github.com/your-username/lateral_movement_detector.git)
+cd lateral_movement_detector
+
+# 2. Set up virtual environment
+python -m venv .venv
+
+# On Linux/macOS:
+source .venv/bin/activate
+
+# On Windows:
+.\.venv\Scripts\Activate.ps1
+
+# 3. Install the package
+pip install .
+
+# For development and testing extras:
+pip install -e ".[dev]"
+
+```
+
+---
 
 ## Usage
 
-    lmr analyze capture.pcapng --case IR-001
-    lmr analyze --zeek-logs ./zeek-logs --case IR-002
-    lmr doctor
+LMR provides an enterprise CLI powered by `rich-argparse`. View the full options list anytime with `lmr --help`.
 
-`lmr doctor` will check your machine and print setup instructions for Docker or Zeek.
+### 1. Environment Verification (`doctor`)
 
-## Output (in development)
+Check local system dependencies (Zeek, Docker) before analyzing captures:
 
-    out/IR-001/
-      report.html        interactive graph, timeline, finding cards
-      findings.json      machine-readable findings
-      findings.csv       for Excel or Timeline Explorer
-      coverage.txt       what was analyzed and what was skipped
-      manifest.json      input SHA-256, tool, rule, and Zeek versions
-      evidence/          per-finding PCAP slices and Wireshark filters
+```bash
+lmr doctor
 
-## Requirements
+```
 
-- Python 3.11 or newer
-- One of: Docker (Zeek bundled in the image), a local Zeek install, or existing Zeek logs
+### 2. PCAP Analysis (`analyze`)
 
-## Repository layout
+Analyze a raw network capture file. Results are written directly to `out/<case_name>/`:
 
-    src/lmr/          tool source code (CLI, runner, parsers, detections, graph)
-    tests/            unit tests and fixtures
-    docs/             notes, triage guides, dataset index
-    samples/          tiny sample logs
-    scripts/          helper scripts
+```bash
+lmr analyze evidence.pcap --case IR-001
 
-## Test data
+```
 
-Capture files are not stored in this repository. docs/dataset_index.csv lists the captures used for development, with sizes and SHA-256 hashes so results can be reproduced. Sources are public: CyberDefenders labs, the Zeek project's test traces, and WRCCDC competition captures. Credit belongs to their authors.
+*(Both `analyze` and `analyse` are accepted).*
 
-## Roadmap
+### 3. Containerized Zeek Execution
 
-- [x] Phase A: environment, Zeek verified, data organized, repository created
-- [x] Phase B: Zeek runner, memory-efficient TSV parser, unified event schema, first detection (SMB/PsExec), attack graph builder
-- [ ] Phase C: remaining detections, HTML/JSON/CSV reports, evidence PCAP slicing
-- [ ] Phase D: validation on labeled captures, Docker image, CI, v0.1.0 release
+Force Zeek execution inside Docker (recommended for Windows environments without WSL):
 
-## Known limitations
+```bash
+lmr analyze evidence.pcapng --case Case001 --force-docker
 
-- Encrypted SMB3 and WinRM payloads hide content. Detection there relies on metadata.
-- Requires Zeek, directly or through Docker, unless you supply Zeek logs.
-- NTLM / pass-the-hash detection is heuristic and will carry lower confidence.
-- Validation results have not been published yet.
+```
 
-## License
+### 4. Direct Zeek Log Ingestion
 
-MIT (license file to be added).
+Bypass packet processing when dealing with existing Zeek logs (ideal for air-gapped or pre-triaged captures):
+
+```bash
+lmr analyze --zeek-logs ./logs/ --case Case002
+
+```
+
+---
+
+## Output Structure
+
+Each analysis produces an isolated investigation bundle under `out/<case_name>/`:
+
+```text
+out/<case_name>/
+├── report.html             # Standalone interactive D3/NetworkX attack graph
+├── findings.json           # Machine-readable telemetry for SIEM/SOAR ingestion
+├── findings.csv            # Structured tabular summary of all alerts
+├── evidence_filters.csv    # Ready-to-paste Wireshark display filters per finding
+└── zeek_logs/              # Raw generated TSV logs preserved for chain of custody
+
+```
+
+---
+
+## Verification & CI/CD
+
+LMR enforces strict type checking and automated regression testing across all modules.
+
+```bash
+# Run the complete test suite
+pytest -v
+
+# Run static type validation
+mypy src/lmr
+
+```
+
+Continuous Integration is managed via GitHub Actions across both Python 3.11 and 3.12 environments.
+
+---
 
 ## Author
 
-Krishnendu Bhattacherjee
+**Krishnendu Bhattacherjee**
