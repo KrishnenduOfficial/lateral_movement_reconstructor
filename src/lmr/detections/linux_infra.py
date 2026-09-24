@@ -52,7 +52,7 @@ def _parse_port(val: Any) -> int:
 
 def detect_linux_infra(events: Iterable[Any]) -> Iterable[DetectionFinding]:
     """Scans events for Linux lateral execution with dynamic deduplication."""
-    seen_states = set()
+    seen_states: set = set()
 
     for event in events:
         try:

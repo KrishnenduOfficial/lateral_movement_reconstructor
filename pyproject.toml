@@ -24,3 +24,7 @@ dev = [
 
 [project.scripts]
 lmr = "lmr.cli:main"
+
+[tool.mypy]
+ignore_missing_imports = true
+allow_redefinition = true

@@ -121,7 +121,7 @@ def compute_blast_radius_summary(findings: List[DetectionFinding], graph_metrics
 def export_interactive_html(findings: List[DetectionFinding], graph_metrics: dict, output_path: Path) -> None:
     nodes_map = {}
     edges_list = []
-    tactic_counts = {}
+    tactic_counts: dict[str, int] = {}
 
     patient_zero_set = set(graph_metrics.get("patient_zero_candidates", []))
     target_hubs_set = set(graph_metrics.get("target_hubs", []))
@@ -748,5 +748,5 @@ def export_interactive_html(findings: List[DetectionFinding], graph_metrics: dic
 </body>
 </html>
 """
-    with open(output_path, "w", encoding="utf-8") as f:
-        f.write(html_template)
+    with open(output_path, "w", encoding="utf-8") as html_file:
+        html_file.write(html_template)

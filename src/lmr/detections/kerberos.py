@@ -55,7 +55,7 @@ def detect_kerberos(events: Iterable[Any]) -> Iterable[DetectionFinding]:
     # State tracking for AES velocity: {src_ip: set([service1, service2, ...])}
     aes_tracker = defaultdict(set)
     aes_alerted = set()
-    seen_states = set()
+    seen_states: set = set()
 
     for event in events:
         try:

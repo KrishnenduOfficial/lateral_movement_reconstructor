@@ -51,7 +51,7 @@ def detect_rdp(events: Iterable[Any]) -> Iterable[DetectionFinding]:
     Examines rdp.log attributes (cookie, selected_security, client_build)
     and port 3389 transport streams. Incorporates stream-safe deduplication.
     """
-    seen_states = set()
+    seen_states: set = set()
 
     for event in events:
         try:

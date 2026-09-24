@@ -56,7 +56,7 @@ def _parse_auth_attempts(val: Any) -> int:
 
 def detect_ssh(events: Iterable[Any]) -> Iterable[DetectionFinding]:
     """Scans network events for SSH lateral movement with dynamic deduplication."""
-    seen_states = set()
+    seen_states: set = set()
 
     for event in events:
         try:

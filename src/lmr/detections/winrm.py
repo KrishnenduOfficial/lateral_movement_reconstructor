@@ -42,7 +42,7 @@ def _canonicalize_path(raw_uri: Any) -> str:
 
 def detect_winrm(events: Iterable[Any]) -> Iterable[DetectionFinding]:
     """Scans network events for WinRM lateral movement with dynamic deduplication."""
-    seen_states = set()
+    seen_states: set = set()
 
     for event in events:
         try:

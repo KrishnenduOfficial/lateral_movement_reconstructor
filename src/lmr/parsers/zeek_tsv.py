@@ -46,7 +46,7 @@ def parse_zeek_tsv(log_path: Path) -> Iterator[Dict[str, Any]]:
 
             # Parse actual log data
             values = line.split(separator)
-            record = {}
+            record: dict = {}
             
             for col_name, val, col_type in zip(fields, values, types):
                 if val == unset_field or val == empty_field:

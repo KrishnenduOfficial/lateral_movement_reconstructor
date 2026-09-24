@@ -86,7 +86,7 @@ def detect_ntlm(events: Iterable[Any]) -> Iterable[DetectionFinding]:
     spread_tracker = defaultdict(set)
 
     alerted_spray = set()
-    seen_states = set()
+    seen_states: set = set()
 
     for event in events:
         try:

@@ -144,7 +144,7 @@ def run_analyze(args: argparse.Namespace) -> None:
             try:
                 raw_data = list(parse_zeek_tsv(log_path)) 
                 if raw_data:
-                    normalized = list(normalize_zeek_logs(log_type, raw_data))
+                    normalized = list(normalize_zeek_logs(log_type, iter(raw_data)))
                     all_events.extend(normalized)
                     loaded_logs_count += 1
                     console.print(f"  [green]↳[/green] Loaded [bold]{len(normalized):,}[/bold] events from [cyan]{log_filename}[/cyan]")
@@ -170,7 +170,7 @@ def run_analyze(args: argparse.Namespace) -> None:
     console.print("\n[bold bright_blue][*][/bold bright_blue] Executing ATT&CK analyzers...")
     for name, detector_func in detectors:
         try:
-            module_findings = list(detector_func(all_events))
+            module_findings = list(detector_func(iter(all_events)))
             if module_findings:
                 findings.extend(module_findings)
         except Exception as e:

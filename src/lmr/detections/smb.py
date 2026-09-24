@@ -31,7 +31,7 @@ def _is_loopback_or_self(src: str, dst: str) -> bool:
 
 def detect_smb(events: Iterable[Any]) -> Iterable[DetectionFinding]:
     """Scans network events for SMB Admin Share pivoting with dynamic deduplication."""
-    seen_states = set()
+    seen_states: set = set()
 
     for event in events:
         try:
